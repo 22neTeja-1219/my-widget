@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Maps Widget</title>
+  <script src="https://js.zohostatic.com/creator/widgets/1.0/creatorwidgetsdk.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;padding:12px;background:#f5f5f5}
+    .header h1{font-size:20px;color:#333;margin-bottom:10px}
+    .tab-bar{display:flex;gap:0;margin-bottom:10px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
+    .tab-bar button{flex:1;padding:10px;background:#fff;border:none;font-size:13px;cursor:pointer;font-weight:bold;color:#666}
+    .tab-bar button.active{background:#2196F3;color:#fff}
+    .tab-bar button:hover:not(.active){background:#f0f0f0}
+    .search-box{display:flex;gap:8px;margin-bottom:10px}
+    .search-box input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+    .search-box input:focus{border-color:#2196F3}
+    .search-box button{padding:10px 20px;background:#2196F3;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer}
+    .search-box button:hover{background:#1976D2}
+    .ab-box{display:none;margin-bottom:10px;background:#fff;padding:12px;border-radius:8px;border:1px solid #ddd}
+    .ab-box.show{display:block}
+    .ab-box label{font-size:12px;font-weight:bold;color:#555;display:block;margin-bottom:4px}
+    .ab-box input{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:8px;outline:none}
+    .ab-box input:focus{border-color:#2196F3}
+    .ab-box button{width:100%;padding:10px;background:#ff9800;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:bold}
+    .ab-box button:hover{background:#f57c00}
+    #mapFrame{width:100%;height:450px;border-radius:10px;border:1px solid #ddd;background:#e8e8e8}
+    .controls{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+    .controls button{padding:7px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer}
+    .controls button:hover{background:#f0f0f0}
+    .controls button.active{background:#2196F3;color:#fff;border-color:#2196F3}
+    .distance-card{margin-top:10px;padding:14px;background:#e3f2fd;border-radius:10px;border:1px solid #90caf9;display:none}
+    .distance-card .title{font-size:14px;font-weight:bold;color:#1565c0;margin-bottom:8px}
+    .distance-card .stats{display:flex;gap:12px;flex-wrap:wrap}
+    .distance-card .stat{text-align:center;flex:1;min-width:70px}
+    .distance-card .stat-value{font-size:20px;font-weight:bold;color:#1565c0}
+    .distance-card .stat-label{font-size:10px;color:#666;margin-top:2px}
+    .info-bar{margin-top:10px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #ddd;font-size:13px;color:#555}
+    .info-bar strong{color:#333}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Interactive Maps</h1>
+  </div>
+
+  <div class="tab-bar">
+    <button class="active" onclick="switchTab('search',this)">Search Place</button>
+    <button onclick="switchTab('ab',this)">A to B Distance</button>
+  </div>
+
+  <div id="searchPanel">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search any place, city, or address..." />
+      <button onclick="searchPlace()">Search</button>
+    </div>
+  </div>
+
+  <div id="abPanel" class="ab-box">
+    <label>Location A (From):</label>
+    <input type="text" id="locA" placeholder="Enter starting location..." />
+    <label>Location B (To):</label>
+    <input type="text" id="locB" placeholder="Enter destination..." />
+    <button onclick="calcABDistance()">Calculate Distance</button>
+  </div>
+
+  <iframe id="mapFrame" src="https://maps.google.com/maps?q=16.2389,80.6394&z=12&output=embed" allowfullscreen loading="lazy"></iframe>
+
+  <div class="controls">
+    <button class="active" id="btnMap" onclick="highlightBtn(this);showMap()">Map View</button>
+    <button id="btnMyLoc" onclick="highlightBtn(this);getCurrentLocation()">My Location</button>
+    <button id="btnClear" onclick="highlightBtn(this);clearAll()">Clear All</button>
+  </div>
+
+  <div class="distance-card" id="distanceCard">
+    <div class="title" id="distTitle">Distance</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="distKm">0</div><div class="stat-label">Kilometers</div></div>
+      <div class="stat"><div class="stat-value" id="distMi">0</div><div class="stat-label">Miles</div></div>
+      <div class="stat"><div class="stat-value" id="distTime">0</div><div class="stat-label">By Car (approx)</div></div>
+      <div class="stat"><div class="stat-value" id="distWalk">0</div><div class="stat-label">Walking (approx)</div></div>
+    </div>
+  </div>
+
+  <div class="info-bar" id="infoBar">
+    Search for any place or use A-to-B mode to calculate distance between two locations.
+  </div>
+
+  <script>
+    var myLocation = null;
+    var lastSearch = "";
+
+    document.getElementById("searchInput").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") searchPlace();
+    });
+    document.getElementById("locA").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") document.getElementById("locB").focus();
+    });
+    document.getElementById("locB").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") calcABDistance();
+    });
+
+    getCurrentLocation();
+
+    function switchTab(tab, btn) {
+      document.querySelectorAll(".tab-bar button").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      if (tab === "search") {
+        document.getElementById("searchPanel").style.display = "block";
+        document.getElementById("abPanel").classList.remove("show");
+      } else {
+        document.getElementById("searchPanel").style.display = "none";
+        document.getElementById("abPanel").classList.add("show");
+      }
+    }
+
+    function highlightBtn(btn) {
+      document.querySelectorAll(".controls button").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+    }
+
+    function searchPlace() {
+      var query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
+      lastSearch = query;
+      document.getElementById("mapFrame").src = "https://maps.google.com/maps?q=" + encodeURIComponent(query) + "&z=14&output=embed";
+      document.getElementById("infoBar").innerHTML = "<strong>Showing:</strong> " + query;
+
+      if (myLocation) {
+        calcDistanceTo(query);
+      }
+    }
+
+    function calcDistanceTo(query) {
+      var script = document.createElement("script");
+      script.src = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(query) + "&limit=1&json_callback=handleSearchResult";
+      script.onerror = function() { script.remove(); };
+      document.body.appendChild(script);
+    }
+
+    window.handleSearchResult = function(results) {
+      if (results && results.length > 0) {
+        var dest = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+        var name = results[0].display_name.split(",")[0];
+        showDistance(myLocation, dest, "Your location to " + name);
+      }
+    };
+
+    function calcABDistance() {
+      var locAText = document.getElementById("locA").value.trim();
+      var locBText = document.getElementById("locB").value.trim();
+      if (!locAText || !locBText) {
+        document.getElementById("infoBar").innerHTML = "Please enter both locations.";
+        return;
+      }
+      document.getElementById("infoBar").innerHTML = "Calculating...";
+      document.getElementById("mapFrame").src = "https://maps.google.com/maps?saddr=" + encodeURIComponent(locAText) + "&daddr=" + encodeURIComponent(locBText) + "&output=embed";
+
+      var script = document.createElement("script");
+      script.src = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(locAText) + "&limit=1&json_callback=handleLocA";
+      script.onerror = function() { script.remove(); };
+      document.body.appendChild(script);
+
+      window.handleLocA = function(resA) {
+        if (!resA || resA.length === 0) {
+          document.getElementById("infoBar").innerHTML = "Could not find: " + locAText;
+          return;
+        }
+        var pointA = { lat: parseFloat(resA[0].lat), lng: parseFloat(resA[0].lon) };
+        var nameA = resA[0].display_name.split(",")[0];
+
+        var script2 = document.createElement("script");
+        script2.src = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(locBText) + "&limit=1&json_callback=handleLocB";
+        script2.onerror = function() { script2.remove(); };
+        document.body.appendChild(script2);
+
+        window.handleLocB = function(resB) {
+          if (!resB || resB.length === 0) {
+            document.getElementById("infoBar").innerHTML = "Could not find: " + locBText;
+            return;
+          }
+          var pointB = { lat: parseFloat(resB[0].lat), lng: parseFloat(resB[0].lon) };
+          var nameB = resB[0].display_name.split(",")[0];
+          showDistance(pointA, pointB, nameA + " to " + nameB);
+        };
+      };
+    }
+
+    function showDistance(from, to, title) {
+      var R = 6371;
+      var dLat = (to.lat - from.lat) * Math.PI / 180;
+      var dLon = (to.lng - from.lng) * Math.PI / 180;
+      var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(from.lat*Math.PI/180)*Math.cos(to.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      var straightKm = R * c;
+      var roadKm = straightKm * 1.3;
+      var roadMi = roadKm * 0.621371;
+      var carMin = Math.round(roadKm / 50 * 60);
+      var carHr = Math.floor(carMin / 60);
+      var carRemMin = carMin % 60;
+      var carStr = carHr > 0 ? carHr + "h " + carRemMin + "m" : carMin + " min";
+      var walkMin = Math.round(roadKm / 5 * 60);
+      var walkHr = Math.floor(walkMin / 60);
+      var walkRemMin = walkMin % 60;
+      var walkStr = walkHr > 0 ? walkHr + "h " + walkRemMin + "m" : walkMin + " min";
+
+      document.getElementById("distKm").textContent = roadKm.toFixed(1) + " km";
+      document.getElementById("distMi").textContent = roadMi.toFixed(1) + " mi";
+      document.getElementById("distTime").textContent = carStr;
+      document.getElementById("distWalk").textContent = walkStr;
+      document.getElementById("distTitle").textContent = title;
+      document.getElementById("distanceCard").style.display = "block";
+      document.getElementById("infoBar").innerHTML = "<strong>" + title + ":</strong> " + roadKm.toFixed(1) + " km (approx road distance)";
+    }
+
+    function showMap() {
+      if (lastSearch) {
+        document.getElementById("mapFrame").src = "https://maps.google.com/maps?q=" + encodeURIComponent(lastSearch) + "&z=14&output=embed";
+      } else if (myLocation) {
+        document.getElementById("mapFrame").src = "https://maps.google.com/maps?q=" + myLocation.lat + "," + myLocation.lng + "&z=14&output=embed";
+      }
+    }
+
+    function getCurrentLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+          myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          document.getElementById("mapFrame").src = "https://maps.google.com/maps?q=" + myLocation.lat + "," + myLocation.lng + "&z=14&output=embed";
+          document.getElementById("infoBar").innerHTML = "<strong>Location found!</strong> Search a place to see distance.";
+        }, function() {
+          document.getElementById("infoBar").innerHTML = "Location denied. Search manually.";
+        });
+      }
+    }
+
+    function clearAll() {
+      lastSearch = "";
+      document.getElementById("distanceCard").style.display = "none";
+      document.getElementById("searchInput").value = "";
+      document.getElementById("locA").value = "";
+      document.getElementById("locB").value = "";
+      document.getElementById("mapFrame").src = "https://maps.google.com/maps?q=16.2389,80.6394&z=12&output=embed";
+      document.getElementById("infoBar").innerHTML = "Cleared. Search or use A-to-B mode.";
+    }
+
+    try { ZOHO.CREATOR.init(); } catch(e) {}
+  </script>
+</body>
+</html>
